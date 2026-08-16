@@ -199,10 +199,23 @@ async def get_prerendered_page(request: Request, path: str, db: Session = Depend
                 if not site:
                     raise HTTPException(status_code=404, detail="Dive Site not found")
 
-                # Extract a random photo media URL if available
-                photos = [m for m in site.media if m.media_type == MediaType.photo] if site.media else []
-                if photos:
-                    photo_media = random.choice(photos)
+                # Extract a random photo media URL if available (combining both direct site photos and public dive log photos at this site)
+                from app.models import SiteMedia, DiveMedia
+
+                site_photos = db.query(SiteMedia).filter(
+                    SiteMedia.dive_site_id == site.id,
+                    SiteMedia.media_type == MediaType.photo
+                ).all()
+
+                dive_photos = db.query(DiveMedia).join(Dive).filter(
+                    Dive.dive_site_id == site.id,
+                    Dive.is_private == False,
+                    DiveMedia.media_type == MediaType.photo
+                ).all()
+
+                all_photos = site_photos + dive_photos
+                if all_photos:
+                    photo_media = random.choice(all_photos)
                     image_url = make_absolute_url(photo_media.url, base_url)
 
                 slug = get_dive_site_slug(site)
