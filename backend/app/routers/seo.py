@@ -20,6 +20,68 @@ def make_absolute_url(url: str, base_url: str) -> str:
     if url.startswith(("http://", "https://")):
         return url
     return f"{base_url.rstrip('/')}/{url.lstrip('/')}"
+
+from urllib.parse import quote
+
+def is_flickr_url(url: str) -> bool:
+    if not url:
+        return False
+    return "flic.kr/p/" in url or "flickr.com/photos/" in url
+
+
+def resolve_flickr_direct_url(url: str) -> Optional[str]:
+    """Converts a Flickr page URL into its direct static image URL via oEmbed API."""
+    try:
+        oembed_url = f"https://www.flickr.com/services/oembed/?url={quote(url)}&format=json"
+        response = httpx.get(oembed_url, timeout=5, headers={
+            "User-Agent": "Divemap/1.0 (https://github.com/kargig/divemap)"
+        })
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("html"):
+                img_match = re.search(r'<img[^>]+src="([^"]+)"', data["html"], re.IGNORECASE)
+                if img_match and img_match.group(1):
+                    return img_match.group(1)
+    except Exception as e:
+        logger.warning(f"Failed to resolve Flickr direct URL for {url} inside SEO pre-render: {e}")
+    return None
+
+
+def resolve_seo_image_url(media_url: str, base_url: str) -> Optional[str]:
+    if not media_url:
+        return None
+
+    # 1. Handle Flickr URLs (convert page URL into direct static image CDN URL)
+    if is_flickr_url(media_url):
+        direct_flickr = resolve_flickr_direct_url(media_url)
+        if direct_flickr:
+            return direct_flickr
+        return media_url
+
+    # 2. Handle absolute URLs (starts with http/https) directly
+    if media_url.startswith(("http://", "https://")):
+        return media_url
+
+    # 3. Handle local/R2 paths through get_r2_storage() and make_absolute_url
+    try:
+        from app.services.r2_storage_service import get_r2_storage
+        r2_storage = get_r2_storage()
+        r2_url = r2_storage.get_photo_url(media_url)
+        return make_absolute_url(r2_url, base_url)
+    except Exception as e:
+        logger.error(f"Failed to resolve SEO image {media_url}: {e}")
+        return make_absolute_url(media_url, base_url)
+
+
+def get_image_mime_type(url: str) -> str:
+    if not url:
+        return "image/jpeg"
+    clean_url = url.split("?")[0].lower()
+    if clean_url.endswith(".webp") or "_medium.webp" in clean_url:
+        return "image/webp"
+    if clean_url.endswith(".png"):
+        return "image/png"
+    return "image/jpeg"
 from generate_static_content import get_dive_site_slug, get_diving_center_slug, slugify
 from static_html import (
     _site_rating_stats,
@@ -138,6 +200,9 @@ async def get_prerendered_page(request: Request, path: str, db: Session = Depend
     main_content = ""
     json_ld: Optional[dict] = None
     image_url: Optional[str] = None
+    image_type: Optional[str] = None
+    image_width: Optional[int] = None
+    image_height: Optional[int] = None
 
     # Routing
     try:
@@ -216,7 +281,22 @@ async def get_prerendered_page(request: Request, path: str, db: Session = Depend
                 all_photos = site_photos + dive_photos
                 if all_photos:
                     photo_media = random.choice(all_photos)
-                    image_url = make_absolute_url(photo_media.url, base_url)
+                    # Order of preference: thumbnail, if it doesn't exist then medium, if it doesn't exist then original
+                    if photo_media.thumbnail_url:
+                        preview_path = photo_media.thumbnail_url
+                        image_width = 400
+                        image_height = 400
+                    elif photo_media.medium_url:
+                        preview_path = photo_media.medium_url
+                        image_width = 1200
+                        image_height = 1200
+                    else:
+                        preview_path = photo_media.url
+                        image_width = None
+                        image_height = None
+                    
+                    image_url = resolve_seo_image_url(preview_path, base_url)
+                    image_type = get_image_mime_type(image_url)
 
                 slug = get_dive_site_slug(site)
                 # Check for mismatched/missing slug and return 301 Redirect for canonicalization
@@ -270,7 +350,10 @@ async def get_prerendered_page(request: Request, path: str, db: Session = Depend
 
                 # Use diving center logo if it exists
                 if center.logo_url:
-                    image_url = make_absolute_url(center.logo_url, base_url)
+                    image_url = resolve_seo_image_url(center.logo_url, base_url)
+                    image_type = get_image_mime_type(image_url)
+                    image_width = 512
+                    image_height = 512
 
                 slug = get_diving_center_slug(center)
                 # Check for mismatched/missing slug and return 301 Redirect for canonicalization
@@ -409,7 +492,22 @@ async def get_prerendered_page(request: Request, path: str, db: Session = Depend
                 photos = [m for m in dive.media if m.media_type == MediaType.photo] if dive.media else []
                 if photos:
                     photo_media = random.choice(photos)
-                    image_url = make_absolute_url(photo_media.url, base_url)
+                    # Order of preference: thumbnail, if it doesn't exist then medium, if it doesn't exist then original
+                    if photo_media.thumbnail_url:
+                        preview_path = photo_media.thumbnail_url
+                        image_width = 400
+                        image_height = 400
+                    elif photo_media.medium_url:
+                        preview_path = photo_media.medium_url
+                        image_width = 1200
+                        image_height = 1200
+                    else:
+                        preview_path = photo_media.url
+                        image_width = None
+                        image_height = None
+                    
+                    image_url = resolve_seo_image_url(preview_path, base_url)
+                    image_type = get_image_mime_type(image_url)
 
                 diver = dive.user.username if dive.user else "Diver"
                 site_name = dive.dive_site.name if dive.dive_site else "Unknown Site"
@@ -641,6 +739,9 @@ async def get_prerendered_page(request: Request, path: str, db: Session = Depend
         og_type="website",
         json_ld=json_ld,
         image_url=image_url,
+        image_type=image_type,
+        image_width=image_width,
+        image_height=image_height,
     )
 
     return HTMLResponse(

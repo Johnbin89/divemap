@@ -57,40 +57,60 @@ class ThumbnailGenerator:
         media_id = media_item.id
         original_url = media_item.url
         
+        logger.info(f"[{get_timestamp()}] 🖼️  Evaluating {media_type_label} ID {media_id} (URL: {original_url})...")
+        
         # Skip if not a photo
         if isinstance(media_item.media_type, str):
              if media_item.media_type != 'photo':
+                 logger.info(f"   ⏭️  Skipping non-photo media type: {media_item.media_type}")
                  return
         else:
              if media_item.media_type.value != 'photo':
+                 logger.info(f"   ⏭️  Skipping non-photo media type: {media_item.media_type.value}")
                  return
 
-        # Skip if already has medium_url (unless forced)
-        if media_item.medium_url and not self.force:
+        # Skip if already has thumbnail_url (unless forced)
+        if media_item.thumbnail_url and not self.force:
+            logger.info("   ⏭️  Skipping already processed photo (has thumbnail_url)")
             self.skip_count += 1
             return
 
-        logger.info(f"[{get_timestamp()}] 🖼️  Processing {media_type_label} ID {media_id}...")
+        # Check if the URL is external (Flickr, Google, etc. - anything starting with http/https that is not our R2 bucket)
+        file_path = original_url
+        if original_url.startswith(('http://', 'https://')):
+            is_r2 = 'r2.dev' in original_url or 'cloudflarestorage.com' in original_url
+            public_domain = os.getenv('R2_PUBLIC_DOMAIN')
+            is_custom_domain = public_domain in original_url if public_domain else False
+            
+            if not (is_r2 or is_custom_domain):
+                logger.info(f"   ⏭️  Skipping external URL: {original_url}")
+                self.skip_count += 1
+                return
+            
+            # Extract the relative R2 path/key from the full URL
+            extracted_key = None
+            for prefix in ("user_", "centers/", "avatars/"):
+                if prefix in original_url:
+                    idx = original_url.find(prefix)
+                    if idx != -1:
+                        extracted_key = original_url[idx:]
+                        break
+            if extracted_key:
+                file_path = extracted_key
+            else:
+                logger.info(f"   ⏭️  Skipping HTTP URL (could not extract relative path): {original_url}")
+                self.skip_count += 1
+                return
 
         if self.dry_run:
-            logger.info(f"   [DRY RUN] Would process: {original_url}")
+            logger.info(f"   [DRY RUN] Would generate thumbnails for: {file_path}")
             self.success_count += 1
             return
 
+        logger.info(f"   ⚙️  Generating thumbnails for R2 path: {file_path}...")
+
         try:
             # 1. Download Original
-            # Extract path from URL if it's a full URL, or use as is if relative/key
-            file_path = original_url
-            if file_path.startswith('http'):
-                # Basic heuristic to get key from URL if possible, or just fail if external
-                if 'r2.dev' in file_path or os.getenv('R2_PUBLIC_DOMAIN', 'xxx') in file_path:
-                    # Try to extract key? Complex.
-                    # For now, assume stored paths are relative keys in DB like "user_1/..."
-                    # If it's a full http URL, it might be external (Flickr), which we skip
-                    logger.info(f"   ⏭️  Skipping external URL: {original_url}")
-                    self.skip_count += 1
-                    return
-            
             content = r2_storage.download_profile(0, file_path) # user_id 0 as generic, download logic handles it
             if not content:
                 logger.error(f"   ❌ Failed to download original: {file_path}")
@@ -153,6 +173,12 @@ class ThumbnailGenerator:
                 self.fail_count += 1
                 return
 
+            # Prevent re-uploading or duplicating the original image (it is already in R2!)
+            if 'original' in image_streams:
+                del image_streams['original']
+            if 'original_format' in image_streams:
+                del image_streams['original_format']
+
             # Upload set
             uploaded_paths = r2_storage.upload_photo_set(
                 user_id=user_id,
@@ -191,7 +217,8 @@ class ThumbnailGenerator:
         # Fetch Media
         # Site Media
         site_media_query = self.db.query(SiteMedia).filter(
-            or_(SiteMedia.medium_url.is_(None), SiteMedia.thumbnail_url.is_(None))
+            SiteMedia.thumbnail_url.is_(None),
+            SiteMedia.media_type == MediaType.photo
         )
         if self.limit > 0:
             site_media_query = site_media_query.limit(self.limit)
@@ -199,7 +226,8 @@ class ThumbnailGenerator:
         
         # Dive Media
         dive_media_query = self.db.query(DiveMedia).filter(
-            or_(DiveMedia.medium_url.is_(None), DiveMedia.thumbnail_url.is_(None))
+            DiveMedia.thumbnail_url.is_(None),
+            DiveMedia.media_type == MediaType.photo
         )
         if self.limit > 0:
             remaining_limit = self.limit - len(site_media_items)

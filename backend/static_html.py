@@ -452,6 +452,9 @@ def _build_head_injection(
     json_ld: Optional[dict] = None,
     include_description: bool = True,
     image_url: Optional[str] = None,
+    image_type: Optional[str] = None,
+    image_width: Optional[int] = None,
+    image_height: Optional[int] = None,
 ) -> str:
     lines = []
     if include_description:
@@ -477,11 +480,22 @@ def _build_head_injection(
     ])
 
     if image_url:
+        # Prevent HTML-escaping of ampersands inside the image_url to ensure simple social scrapers request the valid raw URL
+        safe_image_url = escape_text(image_url).replace("&amp;", "&")
         lines.extend([
-            f'<meta property="og:image" content="{escape_text(image_url)}" data-rh="true" />',
-            f'<meta property="og:image:secure_url" content="{escape_text(image_url)}" data-rh="true" />',
-            f'<meta name="twitter:image" content="{escape_text(image_url)}" data-rh="true" />',
+            f'<meta property="og:image" content="{safe_image_url}" data-rh="true" />',
+            f'<meta property="og:image:secure_url" content="{safe_image_url}" data-rh="true" />',
+            f'<meta name="twitter:image" content="{safe_image_url}" data-rh="true" />',
             f'<meta name="twitter:card" content="summary_large_image" data-rh="true" />',
+        ])
+        if image_type:
+            lines.append(f'<meta property="og:image:type" content="{escape_text(image_type)}" data-rh="true" />')
+        
+        width = image_width or 1200
+        height = image_height or 1200
+        lines.extend([
+            f'<meta property="og:image:width" content="{width}" data-rh="true" />',
+            f'<meta property="og:image:height" content="{height}" data-rh="true" />',
         ])
     else:
         lines.extend([
@@ -489,6 +503,9 @@ def _build_head_injection(
             f'<meta property="og:image:secure_url" content="{escape_text(logo_url)}" data-rh="true" />',
             f'<meta name="twitter:image" content="{escape_text(logo_url)}" data-rh="true" />',
             f'<meta name="twitter:card" content="summary" data-rh="true" />',
+            '<meta property="og:image:type" content="image/png" data-rh="true" />',
+            '<meta property="og:image:width" content="512" data-rh="true" />',
+            '<meta property="og:image:height" content="512" data-rh="true" />',
         ])
 
     lines.extend([
@@ -514,6 +531,9 @@ def render_seo_page(
     og_type: str = "website",
     json_ld: Optional[dict] = None,
     image_url: Optional[str] = None,
+    image_type: Optional[str] = None,
+    image_width: Optional[int] = None,
+    image_height: Optional[int] = None,
 ) -> str:
     # Disable duplicate description injection since we replace the default meta description in the template below!
     head_injection = _build_head_injection(
@@ -525,6 +545,9 @@ def render_seo_page(
         json_ld=json_ld,
         include_description=False,
         image_url=image_url,
+        image_type=image_type,
+        image_width=image_width,
+        image_height=image_height,
     )
 
     # Gorgeous navigation header matching the real app's fixed top navbar precisely
