@@ -226,6 +226,33 @@ const Login = () => {
 
           <FormProvider {...methods}>
             <form className='mt-8 space-y-6' onSubmit={handleSubmit(onSubmit)}>
+              {/* Google Sign-In Button */}
+              {import.meta.env.VITE_GOOGLE_CLIENT_ID &&
+                import.meta.env.VITE_GOOGLE_CLIENT_ID !== 'undefined' && (
+                  <div
+                    className={`transition-opacity duration-200 ${
+                      !isBackendReady ? 'opacity-50 pointer-events-none' : ''
+                    }`}
+                  >
+                    <div
+                      id='google-signin-button'
+                      className='w-full flex justify-center'
+                      style={{ minHeight: '40px' }}
+                    ></div>
+
+                    <div className='relative flex items-center justify-center mt-4 mb-2'>
+                      <div className='absolute inset-0 flex items-center' aria-hidden='true'>
+                        <div className='w-full border-t border-gray-300'></div>
+                      </div>
+                      <div className='relative flex justify-center text-sm'>
+                        <span className='px-2 bg-gray-50 text-gray-500'>
+                          Or connect with credentials
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
               <div className='space-y-4'>
                 <FormField name='username' label='Username or Email'>
                   {({ register, name }) => (
@@ -371,22 +398,6 @@ const Login = () => {
                   )}
                 </div>
               )}
-
-              {/* Google Sign-In Button */}
-              {import.meta.env.VITE_GOOGLE_CLIENT_ID &&
-                import.meta.env.VITE_GOOGLE_CLIENT_ID !== 'undefined' && (
-                  <div
-                    className={`mt-4 transition-opacity duration-200 ${
-                      !isBackendReady ? 'opacity-50 pointer-events-none' : ''
-                    }`}
-                  >
-                    <div
-                      id='google-signin-button'
-                      className='w-full flex justify-center'
-                      style={{ minHeight: '40px' }}
-                    ></div>
-                  </div>
-                )}
             </form>
           </FormProvider>
         </div>

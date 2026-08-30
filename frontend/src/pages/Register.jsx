@@ -216,6 +216,34 @@ const Register = () => {
           </div>
           <FormProvider {...methods}>
             <form className='mt-8 space-y-6' onSubmit={handleSubmit(onSubmit)}>
+              {/* Google Sign-In/Up Button */}
+              {import.meta.env.VITE_GOOGLE_CLIENT_ID &&
+                import.meta.env.VITE_GOOGLE_CLIENT_ID !== 'undefined' && (
+                  <div
+                    className={`transition-opacity duration-200 ${
+                      !isBackendReady ? 'opacity-50 pointer-events-none' : ''
+                    }`}
+                  >
+                    <div id='google-signup-button' className='w-full flex justify-center'></div>
+                    {googleLoading && (
+                      <div className='mt-2 text-center text-sm text-gray-600'>
+                        Creating account with Google... (Account will be immediately active)
+                      </div>
+                    )}
+
+                    <div className='relative flex items-center justify-center mt-4 mb-2'>
+                      <div className='absolute inset-0 flex items-center'>
+                        <div className='w-full border-t border-gray-300' />
+                      </div>
+                      <div className='relative flex justify-center text-sm'>
+                        <span className='px-2 bg-gray-50 text-gray-500'>
+                          Or register with credentials
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
               <div className='space-y-4'>
                 <FormField name='username' label='Username'>
                   {({ register, name }) => (
@@ -333,33 +361,6 @@ const Register = () => {
                       : 'Create account'}
                 </button>
               </div>
-
-              {import.meta.env.VITE_GOOGLE_CLIENT_ID &&
-                import.meta.env.VITE_GOOGLE_CLIENT_ID !== 'undefined' && (
-                  <>
-                    <div className='relative'>
-                      <div className='absolute inset-0 flex items-center'>
-                        <div className='w-full border-t border-gray-300' />
-                      </div>
-                      <div className='relative flex justify-center text-sm'>
-                        <span className='px-2 bg-gray-50 text-gray-500'>Or continue with</span>
-                      </div>
-                    </div>
-
-                    <div
-                      className={`transition-opacity duration-200 ${
-                        !isBackendReady ? 'opacity-50 pointer-events-none' : ''
-                      }`}
-                    >
-                      <div id='google-signup-button' className='w-full flex justify-center'></div>
-                      {googleLoading && (
-                        <div className='mt-2 text-center text-sm text-gray-600'>
-                          Creating account with Google... (Account will be immediately active)
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
 
               <div className='bg-blue-50 border border-blue-200 rounded-md p-4'>
                 <div className='flex'>

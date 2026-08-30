@@ -16,8 +16,31 @@ const Turnstile = ({
   const [_token, setToken] = useState(null);
   const [isExpired, setIsExpired] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
+  const [shouldFade, setShouldFade] = useState(false);
+  const [isFullyHidden, setIsFullyHidden] = useState(false);
   const turnstileRef = useRef(null);
   const widgetIdRef = useRef(null);
+
+  // Handle smooth transition to hide verified banner and save screen real-estate
+  useEffect(() => {
+    if (isVerified) {
+      const fadeTimer = setTimeout(() => {
+        setShouldFade(true);
+      }, 1500);
+
+      const hideTimer = setTimeout(() => {
+        setIsFullyHidden(true);
+      }, 2200);
+
+      return () => {
+        clearTimeout(fadeTimer);
+        clearTimeout(hideTimer);
+      };
+    } else {
+      setShouldFade(false);
+      setIsFullyHidden(false);
+    }
+  }, [isVerified]);
 
   // Default handlers to prevent errors if callbacks are not provided
   const handleVerify = useCallback(
@@ -150,10 +173,20 @@ const Turnstile = ({
     return null;
   }
 
+  if (isFullyHidden) {
+    return null;
+  }
+
   // Show success message when verification is complete
   if (isVerified) {
     return (
-      <div className={`turnstile-container ${className}`}>
+      <div
+        className={`turnstile-container ${className} transition-all duration-700 ease-out origin-top ${
+          shouldFade
+            ? 'opacity-0 max-h-0 py-0 my-0 overflow-hidden border-0 scale-y-0'
+            : 'opacity-100 max-h-24 scale-y-100'
+        }`}
+      >
         <div className='flex items-center justify-center p-3 bg-green-50 border border-green-200 rounded-md'>
           <svg className='w-5 h-5 text-green-500 mr-2' fill='currentColor' viewBox='0 0 20 20'>
             <path
