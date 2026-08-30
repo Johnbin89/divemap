@@ -39,7 +39,9 @@ const PromoBannerManager = () => {
     setPromoState(eligibility);
   }, [location.pathname, user, loading]);
 
-  if (user || loading || !promoState.isEligible) return null;
+  const isExcludedPath = ['/login', '/register'].includes(location.pathname);
+
+  if (user || loading || !promoState.isEligible || isExcludedPath) return null;
 
   const handleDismiss = e => {
     e.stopPropagation();
