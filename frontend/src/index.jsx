@@ -4,6 +4,10 @@ import { HelmetProvider } from 'react-helmet-async';
 
 import './index.css';
 import App from './App';
+import { initConsentMode } from './utils/consent';
+
+// Initialize Google Consent Mode defaults
+initConsentMode();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

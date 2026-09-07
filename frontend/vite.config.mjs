@@ -137,14 +137,25 @@ export default defineConfig(({ mode }) => {
         return html.replace(
           '<head>',
           `<head>
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=${gaId}"></script>
+    <!-- Google tag (gtag.js) with Google Consent Mode v2 -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
+      var savedConsent = null;
+      try {
+        savedConsent = JSON.parse(localStorage.getItem('divemap_cookie_consent'));
+      } catch (e) {}
+      var analyticsGranted = savedConsent && savedConsent.analytics === true;
+      gtag('consent', 'default', {
+        'analytics_storage': analyticsGranted ? 'granted' : 'denied',
+        'ad_storage': 'denied',
+        'ad_user_data': 'denied',
+        'ad_personalization': 'denied'
+      });
       gtag('js', new Date());
       gtag('config', '${gaId}');
-    </script>`
+    </script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=${gaId}"></script>`
         );
       }
     });

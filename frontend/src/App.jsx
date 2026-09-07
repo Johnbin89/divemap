@@ -7,6 +7,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 
 import CapacitorBackButtonHandler from './components/CapacitorBackButtonHandler';
 import ChatWidget from './components/Chat/ChatWidget';
+import CookieConsentBanner from './components/CookieConsentBanner';
 import EmailVerificationBanner from './components/EmailVerificationBanner';
 import Navbar from './components/Navbar';
 import PromoBannerManager from './components/PromoBannerManager';
@@ -467,6 +468,7 @@ function AppContent() {
         </Suspense>
         <ReportIssueButton />
         <ChatWidget />
+        <CookieConsentBanner />
       </main>
       <Toaster
         position='top-right'

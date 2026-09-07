@@ -17,6 +17,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 
+import { openCookieSettings } from '../components/CookieConsentBanner';
 import SEO from '../components/SEO';
 import { formatDate } from '../utils/dateHelpers';
 
@@ -429,6 +430,17 @@ const Privacy = () => {
                   We use analytics cookies to understand how visitors interact with our website,
                   helping us improve our services and user experience.
                 </p>
+              </div>
+
+              <div className='not-prose mt-6 pt-4 border-t border-gray-200 dark:border-gray-700'>
+                <button
+                  type='button'
+                  onClick={openCookieSettings}
+                  className='inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500'
+                >
+                  <Cookie className='w-4 h-4' />
+                  Manage Cookie Preferences
+                </button>
               </div>
             </section>
 
