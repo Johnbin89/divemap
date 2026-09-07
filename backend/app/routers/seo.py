@@ -4,6 +4,7 @@ import os
 import random
 import re
 import sys
+import time
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -108,25 +109,29 @@ router = APIRouter()
 
 # Global in-memory cache and concurrency lock for SPA index.html template
 _spa_template_cache: Optional[str] = None
+_spa_template_fetched_at: float = 0.0
 _spa_template_lock: Optional[asyncio.Lock] = None
+SPA_TEMPLATE_CACHE_TTL: float = float(os.getenv("SPA_TEMPLATE_CACHE_TTL", "300"))  # 5 minutes default
 
 
 async def get_spa_template() -> Optional[str]:
     """
     Fetch the SPA built index.html shell to inject pre-rendered content.
-    Caches the template in-memory. Fetches from nginx or frontend dev servers,
-    or falls back to disk files. Returns None if all sources fail.
+    Caches the template in-memory with a TTL. Fetches from nginx or frontend dev servers,
+    or falls back to disk files. Returns stale cached template on fetch failure if available.
     """
-    global _spa_template_cache, _spa_template_lock
-    if _spa_template_cache is not None:
+    global _spa_template_cache, _spa_template_fetched_at, _spa_template_lock
+    now = time.time()
+    if _spa_template_cache is not None and (now - _spa_template_fetched_at) < SPA_TEMPLATE_CACHE_TTL:
         return _spa_template_cache
 
     if _spa_template_lock is None:
         _spa_template_lock = asyncio.Lock()
 
     async with _spa_template_lock:
+        now = time.time()
         # Double check after acquiring the lock to prevent thundering herd
-        if _spa_template_cache is not None:
+        if _spa_template_cache is not None and (now - _spa_template_fetched_at) < SPA_TEMPLATE_CACHE_TTL:
             return _spa_template_cache
 
         urls = [
@@ -146,6 +151,7 @@ async def get_spa_template() -> Optional[str]:
                     if response.status_code == 200 and response.text:
                         logger.info(f"Successfully fetched SPA template from {url}")
                         _spa_template_cache = response.text
+                        _spa_template_fetched_at = time.time()
                         return _spa_template_cache
                 except Exception as e:
                     logger.debug(f"Failed to fetch SPA template from {url}: {e}")
@@ -156,10 +162,16 @@ async def get_spa_template() -> Optional[str]:
             try:
                 with open(template_path, "r", encoding="utf-8") as f:
                     _spa_template_cache = f.read()
+                    _spa_template_fetched_at = time.time()
                 logger.info(f"Successfully read SPA template from disk: {template_path}")
                 return _spa_template_cache
             except Exception as e:
                 logger.error(f"Failed to read SPA template from {template_path}: {e}")
+
+        # If refresh failed but we have a previously cached template, serve it as stale-while-revalidate
+        if _spa_template_cache is not None:
+            logger.warning("Failed to refresh SPA template from all sources; serving stale cached template.")
+            return _spa_template_cache
 
         logger.warning("No SPA template could be loaded. Falling back to clean semantic-only HTML response.")
         return None

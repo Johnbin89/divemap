@@ -307,3 +307,43 @@ def test_seo_banned_user_dive_404(client, db_session, sample_data):
 
     response = client.get(f"/api/v1/seo/html/dives/{dive.id}/seo-test-dive-log")
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_spa_template_ttl_and_stale_fallback(monkeypatch):
+    import time
+    from unittest.mock import AsyncMock, patch
+    from app.routers import seo
+
+    # Reset cache state
+    seo._spa_template_cache = "<html><head><title>Old Template</title></head><body><div id='root'></div></body></html>"
+    seo._spa_template_fetched_at = time.time()
+    seo.SPA_TEMPLATE_CACHE_TTL = 10.0
+
+    # 1. Within TTL: should return cached template immediately without fetching
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        template = await seo.get_spa_template()
+        assert template == seo._spa_template_cache
+        mock_get.assert_not_called()
+
+    # 2. Expired TTL: should attempt re-fetch and update cache if successful
+    seo._spa_template_fetched_at = time.time() - 20.0
+    new_html = "<html><head><title>New Template</title></head><body><div id='root'></div></body></html>"
+
+    mock_resp = AsyncMock()
+    mock_resp.status_code = 200
+    mock_resp.text = new_html
+
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_resp):
+        template = await seo.get_spa_template()
+        assert template == new_html
+        assert seo._spa_template_cache == new_html
+        assert seo._spa_template_fetched_at > time.time() - 5.0
+
+    # 3. Expired TTL with failed re-fetch: should fall back to stale cached template
+    seo._spa_template_fetched_at = time.time() - 20.0
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock, side_effect=Exception("Network error")):
+        with patch("app.routers.seo.resolve_html_template", return_value=None):
+            template = await seo.get_spa_template()
+            assert template == new_html  # returns stale cache instead of None
+
